@@ -1,4 +1,3 @@
-# app.py
 import streamlit as st
 import folium
 from streamlit_folium import st_folium
@@ -9,7 +8,7 @@ from folium.plugins import PolyLineTextPath
 # Page config
 st.set_page_config(page_title="Geolife Next Location Predictor", layout="centered")
 
-# Remove top margin via CSS
+# Custom CSS to remove top padding
 st.markdown("""
     <style>
         .block-container {
@@ -24,18 +23,18 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-# Session state to avoid rerun issues
+# Session state to retain prediction
 if "predicted" not in st.session_state:
     st.session_state.predicted = False
     st.session_state.result = {}
 
-# Input section
+# Input UI — default values now in India 🇮🇳 (India Gate, Delhi)
 st.markdown("### 🧭 Enter Current Location and Time")
-lat = st.number_input("Current Latitude", value=39.9847, format="%.6f")
-lon = st.number_input("Current Longitude", value=116.3184, format="%.6f")
+lat = st.number_input("Current Latitude", value=28.613939, format="%.6f")  # New Delhi
+lon = st.number_input("Current Longitude", value=77.209023, format="%.6f")
 hour = st.slider("Current Hour (0–23)", 0, 23, 14)
 
-# Prediction button
+# Predict button
 if st.button("🔮 Predict Next Location"):
     input_df = prepare_input(lat, lon, hour)
     lat_model, lon_model = load_models()
@@ -51,26 +50,33 @@ if st.button("🔮 Predict Next Location"):
         "lon": lon,
         "pred_lat": pred_lat,
         "pred_lon": pred_lon,
+        "hour": hour
     }
 
 # Output section
 if st.session_state.predicted:
     res = st.session_state.result
+
     st.success("✅ Prediction Complete!")
     st.markdown(f"""
     **Current Location:**  
     Latitude: `{res["lat"]}`  
-    Longitude: `{res["lon"]}`
+    Longitude: `{res["lon"]}`  
+    Hour: `{res["hour"]}`
 
     **Predicted Next Location:**  
     Latitude: `{res["pred_lat"]:.6f}`  
     Longitude: `{res["pred_lon"]:.6f}`
     """)
 
-    # Create Map
-    m = folium.Map(location=[res["lat"], res["lon"]], zoom_start=15)
+    # Map (default tiles in English)
+    m = folium.Map(
+        location=[res["lat"], res["lon"]],
+        zoom_start=15,
+        tiles="CartoDB positron"
+    )
 
-    # Add markers
+    # Markers
     folium.Marker(
         [res["lat"], res["lon"]],
         tooltip="Current Location",
@@ -80,19 +86,18 @@ if st.session_state.predicted:
 
     folium.Marker(
         [res["pred_lat"], res["pred_lon"]],
-        tooltip="Predicted Next Location",
+        tooltip="Predicted Location",
         popup="🎯 Predicted Location",
         icon=folium.Icon(color='green')
     ).add_to(m)
 
-    # Draw arrow between current and predicted location
+    # Arrow line
     arrow_line = folium.PolyLine(
         locations=[[res["lat"], res["lon"]], [res["pred_lat"], res["pred_lon"]]],
         color="red",
         weight=2.5
     ).add_to(m)
 
-    # Add arrowhead using PolyLineTextPath
     PolyLineTextPath(
         arrow_line,
         '➤',
