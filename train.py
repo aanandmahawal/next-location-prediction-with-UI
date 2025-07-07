@@ -1,40 +1,49 @@
 import pandas as pd
 import numpy as np
 from sklearn.ensemble import RandomForestRegressor
-from sklearn.model_selection import train_test_split
-from sklearn.pipeline import make_pipeline
-from sklearn.preprocessing import StandardScaler
 import joblib
 
-# Load CSV
+# Load data
 df = pd.read_csv("df_clean.csv")
 
-# Add some basic features (same as before)
-df['dist_from_center'] = np.sqrt((df['lat'] - df['lat'].mean())**2 + (df['lon'] - df['lon'].mean())**2)
-df['angle_from_center'] = np.arctan2(df['lat'] - df['lat'].mean(), df['lon'] - df['lon'].mean())
-df['hour'] = 14  # dummy fixed hour
+# Convert hour string "06" to integer 6
+df['hour'] = pd.to_numeric(df['hour'], errors='coerce')
+df.dropna(subset=['hour'], inplace=True)
+
+# Create targets: next latitude and longitude
+df['next_lat'] = df['lat'].shift(-1)
+df['next_lon'] = df['lon'].shift(-1)
+df.dropna(inplace=True)
+
+# Calculate center lat/lon for feature engineering
+center_lat = df['lat'].mean()
+center_lon = df['lon'].mean()
+print(f"Center Latitude: {center_lat}, Center Longitude: {center_lon}")
+
+# Feature engineering
+df['dist_from_center'] = np.sqrt((df['lat'] - center_lat)**2 + (df['lon'] - center_lon)**2)
+df['angle_from_center'] = np.arctan2(df['lat'] - center_lat, df['lon'] - center_lon)
 df['hour_sin'] = np.sin(2 * np.pi * df['hour'] / 24)
 df['hour_cos'] = np.cos(2 * np.pi * df['hour'] / 24)
 
-# Shift for next point prediction
-df['target_lat'] = df['lat'].shift(-1)
-df['target_lon'] = df['lon'].shift(-1)
-df.dropna(inplace=True)
+features = ['dist_from_center', 'angle_from_center', 'hour_sin', 'hour_cos', 'hour']
 
-# Features and targets
-X = df[['dist_from_center', 'angle_from_center', 'hour_sin', 'hour_cos', 'hour']]
-y_lat = df['target_lat']
-y_lon = df['target_lon']
+# Target differences (deltas)
+df['delta_lat'] = df['next_lat'] - df['lat']
+df['delta_lon'] = df['next_lon'] - df['lon']
 
-X_train, _, y_lat_train, _ = train_test_split(X, y_lat, test_size=0.2, random_state=42)
-_, _, y_lon_train, _ = train_test_split(X, y_lon, test_size=0.2, random_state=42)
+# Train Random Forest regressors
+lat_model = RandomForestRegressor(n_estimators=100, random_state=42)
+lon_model = RandomForestRegressor(n_estimators=100, random_state=42)
 
-# Train models
-pipeline = make_pipeline(StandardScaler(), RandomForestRegressor(random_state=42))
-pipeline.fit(X_train, y_lat_train)
-joblib.dump(pipeline, "grid_lat_model.pkl")
+lat_model.fit(df[features], df['delta_lat'])
+lon_model.fit(df[features], df['delta_lon'])
 
-pipeline.fit(X_train, y_lon_train)
-joblib.dump(pipeline, "grid_lon_model.pkl")
+# Save models to disk
+joblib.dump(lat_model, "lat_model.pkl")
+joblib.dump(lon_model, "lon_model.pkl")
 
-print("✅ Models retrained and saved locally!")
+# Save center point to disk for later use
+np.savez("center_point.npz", center_lat=center_lat, center_lon=center_lon)
+
+print("✅ Models trained and saved successfully.")
