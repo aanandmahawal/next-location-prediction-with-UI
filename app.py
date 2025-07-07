@@ -20,7 +20,7 @@ st.markdown("""
 
 # Title
 st.markdown(
-    "<h1 style='text-align: center; margin-bottom: 10px;'>📍 Predict Your Next Location</h1>",
+    "<h1 style='text-align: center; margin-bottom: 10px;'>📡 Predict Your Next Location</h1>",
     unsafe_allow_html=True,
 )
 
